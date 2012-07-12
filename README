@@ -223,6 +223,83 @@ Examples:
  // "out" now contains { 2, 4, 6, 8 }
 
 
+Implementation
+--------------
+
+The main goal of the project is to find a way to "lift" lambdas out of their
+original context, and move them to the global scope to be declared, along with
+any modifications and extras required for them to work, ahead of their point of
+use. There are three main components to this.
+
+First, code must be broken up into a list of lambdas and non-lambda sections.
+The enclosing namespace block wraps its contents in a "non-lambda" marker. When
+an inner function is encountered, it closes the wrapping marker, wraps the body
+of the inner function in a function marker, and reopens the wrapping marker.
+
+Thus this:
+
+ func(void, foo, (void) {
+   fptr g = fn(void, (void), { 0; });
+ })
+
+...initially becomes:
+
+ ( 8blk((void) {
+   fptr g = ), 8fn(void, (void), ( 8blk( { 0; } ) )), 8blk(;
+ }) )
+
+This is a flat list of plain code alternating with inner functions. Functions
+nested within inner functions are wrapped in much the same way, using its own
+main 8blk list, creating a vague tree structure of code block lists within code
+block lists. Further expansion is paused for the moment by truncating the macro
+names to begin with a numeral. The enclosing function's name and return type go
+directly to the namespace builder macro (where they will provide a root name,
+then begin to build the header of the emitted block).
+
+Flattening and processing a tree is a fundamentally recursive task, making it
+ill-suited to a language where recursion is forbidden! Therefore, the block is
+next passed to a group of macros implementing a continuation machine. The tasks
+of splitting the block into a list of functions and a list of code + names,
+pulling nested functions out and attaching them to the end of the queue, and
+finding the next task in the queue are handled by this continuation machine.
+
+The machine itself is heavily ripped off from Vesa Karvonen's Order-PP library,
+except much smaller and lighter. A continuation consists of a macro to run, a
+list of arguments to pass it, and optionally some output to dump (output is put
+at the end, meaning that everything is written in reverse - thus the first code
+encountered, the enclosing namespace using the inner functions, will be last to
+be written out). The macro is cut off with a numeral and is given a prefix with
+the paste operator when it is time to run; recursion is not expressed directly,
+but rather in continuation-passing style.
+
+The queue of "next operations", that accepts nested inner function definitions
+to write (and "extras" like the struct definitions for closures) is actually
+not made explicitly visible to the continuation machine, but instead passed as
+part of the argument list. When a function has been written, it hands control
+over to the 8DO_Q continuation, which grabs the next item from the queue, and
+repackages the rest into the argument list for it.
+
+Because a continuation is returned as a parenthesised list of procedure, args,
+and remainder, breaking out is as simple as returning something not contained
+within parentheses, so that the next continuation step is not invoked. An "end"
+macro, waiting at the end of the queue, does this in an easily-cleaned-up way.
+
+Because the next macro to invoke is held in truncated form, the recursion issue
+is bypassed, as no macro returns its own name in full. There is a maximum limit
+to the number of steps the continuation machine can provide, but at 2^N where N
+is the number of defined CM macros, this is very easily extended.
+
+Simpler tasks, such as applying a macro to each element of a list, are handled
+by more traditional macros in "cmacros.h". These are not recursion-safe, so are
+only ever called on to return values by the CM macros. They have a much lower
+maximum limit, since they grow in a linear fashion (32 by default), but not
+integrating them into the CM should dramatically improve performance, and also
+does not waste CM steps on non-recursive computation. Where the macros need to
+be able to cull some values (e.g. to avoid calculating the unused branch of an
+IF expression), select additional CM steps can be added to filter the amount of
+work being demanded.
+
+
 Final note on usage
 -------------------
 
