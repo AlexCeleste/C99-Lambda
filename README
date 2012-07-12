@@ -1,0 +1,231 @@
+#
+# C99-Lambda: nested functions, lambdas, and closures, in ISO C99
+# ---------------------------------------------------------------
+#
+# originally by Alex "Yasha" Gilding, 2012
+# 
+# This project is placed in the public domain, and may be used for any purpose,
+# without any conditions attached or attribution necessary. You can find a copy
+# of this licence here:
+#
+# ...oh wait.
+#
+# Files supplied AS IS. No warranty is implied and no liability is accepted for
+# any consequences of using this code. Using code like this in a real project
+# is highly likely to result in a sound thrashing from your colleagues.
+#
+
+
+Requirements:
+-------------
+
+C99 conformant (or later) preprocessor. Works with GCC, should work with Clang.
+Does not appear to work with TCC or PCC. Unlikely to work at all with MSVC. The
+continuation-machine is quite demanding on the preprocessor.
+
+A willing suspension of disbelief. All code examples in this readme really are
+standard-conformant ISO C, but it may be hard to believe. This is probably a
+bad thing.
+
+
+Usage:
+------
+
+#include "c_lambda.h"
+
+That's all. It's just a tiny test project, after all. Now your namespace is
+polluted with a bunch of bizarre macros.
+
+
+Public syntax extension macros:
+-------------------------------
+
+The macros intended to be used at the top-level - i.e. in user code - are as
+follows:
+
+
+ namespace(<name>, ...<body>)
+ func(<return type>, <name>, ...<body>)
+
+Any code making use of the inline functions must appear inside one of these two
+block constructs. These must appear at the global scope level, as they provide
+the framework out of which the inner functions are lifted. They also provide a
+root naming scheme for any contained functions. "func" is a convenience version
+that links the namespace to the scope of a normal C function. Example:
+
+ namespace(myFunctionList,
+   typedef int(* fptr)(void);
+   fptr functions[] = {
+     fn(int, (void), { return 1; }),  // Simple function literals
+     fn(int, (void), { return 2; }),
+     fn(int, (void), { return 3; })
+   };
+ )
+ 
+ func(int, myGlobalFunc, (int blah) {
+     //...code here, presumably involving inner functions
+ })
+
+All namespaces must be unique. Typing namespacing to normal toplevel functions
+helps enforce this, while also abstracting the need to think about a naming
+scheme for anonymous objects. Since namespaces must be global, they should not
+nest and should not appear within function scopes.
+
+
+ fn(<return type>, <args>, ...<body>)
+
+The main macro for generating an inline anonymous function. This cannot appear
+outside a func() or namespace() block. Inner functions may nest to any depth
+(within reason and the limits of the continuation machine). Example:
+
+ typedef int(* fptr)(int);
+ func(fptr, someFunc, (void) {
+     return fn(int, (int a), {
+         fptr f = fn(int, (int b), { return b * 6; });
+         return a * f(a + 1);
+     });
+ })
+
+Inline functions declared in this way may *not* appear within parentheses, for
+any reason, even as a macro argument (don't do that). An exception exists, and
+is below, but for the most part parentheses interfere with the macro expansion.
+Anonymous functions using this form *may* appear in most other contexts:
+ - as a return value (shown above)
+ - in a braced initializer list, as above in an array, or for a struct
+ - as the RHS of an assignment (shown above)
+ - in the function-call position, as long as there are no containing parens.
+   Example:
+
+ //...
+ foo = fn(int, (int a, int b), { return (a + b) * (b - a); })(4, 5);
+ fn(void, (int c), { printf("Received c: %d\n", c); })(47);
+ //...
+
+
+ defn(<return type>, <name>, <args>, ...<body>)
+
+Define a function, named and visible in the local scope. The same rules apply
+as for fn() regarding parentheses and namespace blocks. Unlike fn(), defn() is
+a statement, not an expression; as with a normal function declaration, it cannot
+be called in-place or used as a value. Example:
+
+ // Same code as above, using defn() instead of fn()
+ defn(int, helper, (int a, int b), {
+     return (a + b) * (b - a);
+ })
+ foo = helper(4, 5);
+ //...
+
+The name declared by defn() is a normal local constant containing a function
+pointer, and can be used from then on as one would in normal C code.
+
+
+ cl(<return type>, <args>, <free variables>, ...<body>)
+
+This macro creates a closure object in-place, over the variables named in the
+"second args list". The expression is subject to the same rules as fn() - must
+appear within a namespace block, may not appear within parentheses - but also,
+because it does not return a raw C function pointer, may not appear in the call
+position (and therefore C syntax cannot call it like a function). The returned
+value is a struct (declared at the same external site as the function body),
+containing the function pointer and the values of the closed-over variables.
+The struct is stack-allocated; returning the closure requires some user-defined
+method of heap allocation. Example:
+
+ // User supplies a big enough buffer here... dirty trickery
+ func(void, makeAdder, (void * out_buf, int add) {
+     *(sth *)out_buf = *(sth *)& cl(int, (int x), ((int, add)), {
+                                     return x + _env->add;
+                                 });
+ })
+ 
+ // Close over two variables, no args
+ int x = 42, y = 47;
+ cl(void, (...), ((int, x), (int, y)), {
+     printf("%d, %d\n", _env->x, _env->y);
+ });
+
+OK, the first example technically involves undefined behaviour, but the syntax
+is at least legal (if we assume "sth" to be a type of the required size for the
+closure). In the second example, the closure takes no arguments; if this is an
+absolute necessity, the variadic tail should be used instead of "void". Also
+note how the free variable list has a slightly more complicated form than the
+argument list.
+
+Since it is legal in C to cast any struct pointer to a pointer to the struct's
+first element, the pointer to a closure can be cast to a pointer-to-a-function-
+pointer of the right type, taking the closure pointer as its first argument,
+"_env", and the declared arguments as the rest.
+
+Strictly speaking, this invokes undefined behaviour:
+
+ int(* cf)(void *, int) = (int(*)(void*,int))someClosure;
+ cf(someClosure, 42);
+
+...because the type of the first argument is not void *, but in practice it may
+work ...sometimes.
+
+
+ sizeof_cl(<return type>, <args>, <over>)
+
+This macro returns the size of a struct containing elements of the same layout
+as those in a closure with the described signature, which may be useful for
+allocating buffer space in which to return closures. Example:
+
+ // This closure...
+ cl(int, (int a, int b), ((int, x), (int, y)), { return (x + y) * (a + b); });
+ // ...should be "sized" by this expression:
+ int sz = sizeof_cl(int, (int, int), (int, int));
+
+Because of struct alignments and whatnot, this theoretically may not return the
+correct size for the closure... but in practice, it almost certainly will as it
+describes an identical data structure.
+
+
+ _fe1(<function to call>, <lambda>, <other args>...)
+ _fe2(<function to call>, <arg>, <lambda>, <other args>...)
+ _fe3(<function to call>, <arg>, <arg>, <lambda>, <other args>...)
+ _fe4(<function to call>, <arg>, <arg>, <arg>, <lambda>, <other args>...)
+ _cle1(<function to call>, <closure>, <other args>...)
+ _cle2(<function to call>, <arg>, <closure>, <other args>...)
+ _cle3(<function to call>, <arg>, <arg>, <closure>, <other args>...)
+ _cle4(<function to call>, <arg>, <arg>, <arg>, <closure>, <other args>...)
+
+These macros provide the sole exception to the parenthesis rule for anonymous
+functions and inline closures. An anonymous function or closure may appear in
+the respective position marked "lambda" or "closure" for each form, using only
+the procedure body rather than the fn() or cl() macro (see below: basically
+just drop the "fn" or "cl").
+
+The function in position zero will be called with the lambda as an argument,
+along with any arguments appearing in the positions before or after it. If the
+_feN form is being used, the function should accept a function pointer; and if
+the _cleN form is being used, it should accept a closure pointer.
+
+No syntactic form is provided with the lambda in position zero, since a fn()
+form lambda may be called using direct C syntax (shown above), while doing so
+with a closure is frankly more or less pointless.
+
+The _feN and _cleN forms are statements, not expressions, and do not return any
+value. To return a value, the easiest option would be to use an out-parameter
+(possibly defining a wrapper function to pass it through).
+
+Examples:
+
+ // Assume gforeach and gmap are higher-order functions...
+ _fe2(gforeach, glist((char*[]){"foo", "bar", "baz"}), (void, (char * c), {
+     printf("%s: %d\n", c, strlen(c));
+ }));
+ 
+ GList * out; int k = 2;
+ _fe2(gmap, glist((int[]){ 1, 2, 3, 4 }), (int, (int n), ((int, k)), {
+     return n * k;
+ }), &out);
+ // "out" now contains { 2, 4, 6, 8 }
+
+
+Final note on usage
+-------------------
+
+...you probably really shouldn't abuse poor innocent C in this way.
+
