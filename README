@@ -147,10 +147,9 @@ method of heap allocation. Example:
 
 OK, the first example technically involves undefined behaviour, but the syntax
 is at least legal (if we assume "sth" to be a type of the required size for the
-closure). In the second example, the closure takes no arguments; if this is an
-absolute necessity, the variadic tail should be used instead of "void". Also
-note how the free variable list has a slightly more complicated form than the
-argument list.
+closure). In the second example, the closure takes no arguments; to indicate
+this, the variadic tail should be used instead of "void". Also note how the
+free variable list has a slightly more complicated form than the argument list.
 
 Since it is legal in C to cast any struct pointer to a pointer to the struct's
 first element, the pointer to a closure can be cast to a pointer-to-a-function-
@@ -159,7 +158,7 @@ pointer of the right type, taking the closure pointer as its first argument,
 
 Strictly speaking, this invokes undefined behaviour:
 
- int(* cf)(void *, int) = (int(*)(void*,int))someClosure;
+ int(* cf)(void *, int) = (int(**)(void*,int))someClosure;
  cf(someClosure, 42);
 
 ...because the type of the first argument is not void *, but in practice it may
