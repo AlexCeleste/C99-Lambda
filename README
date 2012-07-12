@@ -158,7 +158,7 @@ pointer of the right type, taking the closure pointer as its first argument,
 
 Strictly speaking, this invokes undefined behaviour:
 
- int(* cf)(void *, int) = (int(**)(void*,int))someClosure;
+ int(* cf)(void *, int) = *(int(**)(void*,int))someClosure;
  cf(someClosure, 42);
 
 ...because the type of the first argument is not void *, but in practice it may
