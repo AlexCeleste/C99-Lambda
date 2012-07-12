@@ -3,14 +3,14 @@
 
 #include "c_lambda.h"
 
-/*
+
 func(int, G, (void) {
 	_fe1(foo, (int, (int x, int y), {return x*y;}));
 	_fe2(foo, 1, (int, (int x, int y), {return x*y;}));
 	_fe3(foo, 1, 2, (int, (int x, int y), {return x*y;}));
 	_fe4(foo, 1, 2, 3, (int, (int x, int y), {return x*y;}));
 	return 0;
-})*/
+})
 
 namespace(myFunctionList,
   typedef int(* fptr)(void);
@@ -61,7 +61,8 @@ func(void, makeAdder, (void * out_buf, int add) {
 	});
 })
 
-/*func(void, eTest, (void) {
+/*
+func(void, eTest, (void) {
 	 // Assume gforeach and gmap are higher-order functions...
 	_fe2(gforeach, glist((char*[]){"foo", "bar", "baz"}), (void, (char * c), {
 		printf("%s: %d\n", c, strlen(c));
@@ -72,7 +73,8 @@ func(void, makeAdder, (void * out_buf, int add) {
 		return n * _env->k;
 	}), &out);
 	// "out" now contains { 2, 4, 6, 8 }
-})*/
+})
+*/
 
 int main(void) {
 	return 0;
