@@ -66,7 +66,7 @@ that links the namespace to the scope of a normal C function. Example:
      //...code here, presumably involving inner functions
  })
 
-All namespaces must be unique. Typing namespacing to normal toplevel functions
+All namespaces must be unique. Tying namespacing to normal toplevel functions
 helps enforce this, while also abstracting the need to think about a naming
 scheme for anonymous objects. Since namespaces must be global, they should not
 nest and should not appear within function scopes.
@@ -172,7 +172,9 @@ as those in a closure with the described signature, which may be useful for
 allocating buffer space in which to return closures. Example:
 
  // This closure...
- cl(int, (int a, int b), ((int, x), (int, y)), { return (x + y) * (a + b); });
+ cl(int, (int a, int b), ((int, x), (int, y)), {
+     return (_env->x + _env->y) * (a + b);
+ });
  // ...should be "sized" by this expression:
  int sz = sizeof_cl(int, (int, int), (int, int));
 
@@ -217,8 +219,8 @@ Examples:
  }));
  
  GList * out; int k = 2;
- _fe2(gmap, glist((int[]){ 1, 2, 3, 4 }), (int, (int n), ((int, k)), {
-     return n * k;
+ _cle2(gmap, glist((int[]){ 1, 2, 3, 4 }), (int, (int n), ((int, k)), {
+     return n * _env->k;
  }), &out);
  // "out" now contains { 2, 4, 6, 8 }
 
