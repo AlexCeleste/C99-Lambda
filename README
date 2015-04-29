@@ -127,16 +127,16 @@ This macro creates a closure object in-place, over the variables named in the
 appear within a namespace block, may not appear within parentheses - but also,
 because it does not return a raw C function pointer, may not appear in the call
 position (and therefore C syntax cannot call it like a function). The returned
-value is a struct (declared at the same external site as the function body),
-containing the function pointer and the values of the closed-over variables.
-The struct is stack-allocated; returning the closure requires some user-defined
-method of heap allocation. Example:
+value is a pointer to a stack-allocated struct (declared at the same external
+site as the function body), containing the function pointer, the total size of
+the object, and the values of the closed-over variables. Example:
 
- // User supplies a big enough buffer here... dirty trickery
+ // User supplies a big enough buffer here...
  func(void, makeAdder, (void * out_buf, int add) {
-     *(sth *)out_buf = *(sth *)& cl(int, (int x), ((int, add)), {
-                                     return x + _env->add;
-                                 });
+     closure_type(int, (int)) c = cl(int, (int x), ((int, add)), {
+                                      return x + _env->add;
+                                  });
+     memcpy(out_buf, c, c->_size);
  })
  
  // Close over two variables, no args
@@ -145,42 +145,34 @@ method of heap allocation. Example:
      printf("%d, %d\n", _env->x, _env->y);
  });
 
-OK, the first example technically involves undefined behaviour, but the syntax
-is at least legal (if we assume "sth" to be a type of the required size for the
-closure). In the second example, the closure takes no arguments; to indicate
-this, the variadic tail should be used instead of "void". Also note how the
-free variable list has a slightly more complicated form than the argument list.
+In the second example, the closure takes no arguments; to indicate this, the
+variadic tail should be used instead of "void". Also note how the free variable
+list has a slightly more complicated format than the argument list.
 
-Since it is legal in C to cast any struct pointer to a pointer to the struct's
-first element, the pointer to a closure can be cast to a pointer-to-a-function-
-pointer of the right type, taking the closure pointer as its first argument,
-"_env", and the declared arguments as the rest.
+To invoke a closure, call its _fun field with itself as the first argument. Any
+other arguments may follow. Example:
 
-Strictly speaking, this invokes undefined behaviour:
-
- int(* cf)(void *, int) = *(int(**)(void*,int))someClosure;
- cf(someClosure, 42);
-
-...because the type of the first argument is not void *, but in practice it may
-work ...sometimes.
+ // Invoke a closure
+ closure_type(int, (int)) c = ...
+ c->_fun(c, 6);
 
 
- sizeof_cl(<return type>, <args>, <over>)
+ closure_type(<return type>, <arg types>)
 
-This macro returns the size of a struct containing elements of the same layout
-as those in a closure with the described signature, which may be useful for
-allocating buffer space in which to return closures. Example:
+This macro expands to an anonymous struct pointer type suitable for punning as
+the type of a closure object. The type exposes the _fun and _size fields needed
+for general usage of the closure object. Example:
 
- // This closure...
- cl(int, (int a, int b), ((int, x), (int, y)), {
-     return (_env->x + _env->y) * (a + b);
- });
- // ...should be "sized" by this expression:
- int sz = sizeof_cl(int, (int, int), (int, int));
+ typedef closure_type(int, (int, int)) Clos;
+ Clos c = cl(int, (int x, int y), ((int,a)), { ... });
+ Clos d = malloc(c->_size); memcpy(d, c, c->_size);
+ int x = d->_fun(d, 8, 10);
+ 
+ closure_type(int, (int)) c1 = cl(int, (int x), ...);
 
-Because of struct alignments and whatnot, this theoretically may not return the
-correct size for the closure... but in practice, it almost certainly will as it
-describes an identical data structure.
+Note that C's typing rules mean that every type created by closure_type is
+technically distinct, so it should mostly be used with typedef rather than
+in-place.
 
 
  _fe1(<function to call>, <lambda>, <other args>...)
