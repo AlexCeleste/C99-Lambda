@@ -1,5 +1,5 @@
 
-#include <stdio.h>
+//#include <stdio.h>
 
 #include "c_lambda.h"
 
@@ -48,15 +48,15 @@ func(int, someFunc2, (void) {
 	return helper(foo, 2);
 })
 
-typedef struct { ifptr f; int add; } sth;
-
 // User supplies a big enough buffer here... dirty trickery
 func(void, makeAdder, (void * out_buf, int add) {
-	*(sth *)out_buf = *(sth *)& cl(int, (int x), ((int, add)), {
-                                 return x + _env->add;
-							 });
+	closure_type(int, (int)) c = cl(int, (int x), ((int, add)), {
+                                    return x + _env->add;
+					             });
+	memcpy(out_buf, c, c->_size);
+	
 	int x = 42, y = 47;
-	(void)&cl(void, (...), ((int, x), (int, y)), {
+	cl(void, (...), ((int, x), (int, y)), {
 		printf("%d, %d\n", _env->x, _env->y);
 	});
 })

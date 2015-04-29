@@ -9,10 +9,10 @@
 #define namespace(n, ...) FN_8CM_GO((8EMIT_NS, (n, (), ( 8blk( __VA_ARGS__ ) ), ((8CM_END,(~))))))
 
 #define fn(rt, args, ...) ), 8fn(rt, args, (8blk(__VA_ARGS__))), 8blk(
-#define cl(rt, args, over, ...) ), 8cl(rt, args, over, (8blk(__VA_ARGS__))), 8blk(
+#define cl(rt, args, over, ...) ), 8cl(rt, args, over, (8blk(__VA_ARGS__ }))), 8blk(
 #define defn(rt, n, a, ...) static FN_8FTYPE(rt, const, a, n) = fn(rt, a, __VA_ARGS__);
 
-#define sizeof_cl(rt, args, over) sizeof(struct{void(*f)(void); M_ZIP_WITH(FN_8CLSZ, (M_ID args, M_ID over), M_ILIST) })
+#define closure_type(RT, PT) struct { RT (* _fun) (void * M_FOR_EACH(FN_8CL_ARG_TYPE, M_ID PT)); size_t _size; } *
 
 #define _fe1(_0, ...) FN_8FEXP(_0, (), M_FIRST(__VA_ARGS__), (__VA_ARGS__))
 #define _fe2(_0, _1, ...) FN_8FEXP(_0, (_1,), M_FIRST(__VA_ARGS__), (__VA_ARGS__))
@@ -109,8 +109,10 @@
 
 // Internal lambda builder functions
 
+#define FN_8CL_ARG_TYPE(T) , T
+
 #define FN_8FEXP(call, p, f, R) { FN_8GETTYPE_8fn f = fn f; call(M_ID p M_IF(M_2ORMORE R, (_fun, M_REST_ R), (_fun))); }
-#define FN_8CLEXP(call, p, c, R) { void * _fun = &cl c; call(M_ID p M_IF(M_2ORMORE R, (_fun, M_REST_ R), (_fun))); }
+#define FN_8CLEXP(call, p, c, R) { void * _fun = cl c; call(M_ID p M_IF(M_2ORMORE R, (_fun, M_REST_ R), (_fun))); }
 
 #define FN_8EMIT_NS(N, H, B, Q) FN_8EMIT_NS_((FN_8GET_NL(N, B)), H, (M_ZIP_W2(FN_8EMIT_ELEM, B, M_ILIST)), Q)
 #define FN_8EMIT_NS_(NL, H, BL, Q) (8ZIPNE,(NL, BL, Q), FN_8EMIT_BODY(NL, H, BL))
@@ -126,16 +128,18 @@
 #define FN_8EMIT_BLOCK(P, N) M_IF(M_FIRST P, (M_REST2 P), (FN_8EMIT_NAME((M_REST P, r, a, o), N)))
 #define FN_8EMIT_NAME(P, N) M_IF(M_FIRST P, (FN_8EMIT_CL(N, M_ID P)), (N))
 #define FN_8EMIT_CL(...) FN_8EMIT_CL_(__VA_ARGS__)
-#define FN_8EMIT_CL_(n, _, r, a, o, ...) (struct n##_env_t){ n M_FOR_EACH(FN_8CL_SND, M_ID o) }
+#define FN_8EMIT_CL_(n, _, r, a, o, ...) (void*)&(struct n##_env_t){ \
+  n,sizeof(struct n##_env_t) M_FOR_EACH(FN_8CL_SND, M_ID o) }
 #define FN_8CL_SND(P) , M_REST_ P
 
 #define FN_8EMIT_ENV(E, Q) (8DO_Q, (Q), FN_8EMIT_ENV_(E))
-#define FN_8EMIT_ENV_(n, rt, a, o) struct n##_env_t { FN_8CTYPE(rt, n, a, _fun); M_FOR_EACH(FN_8FLDS, M_ID o) };
+#define FN_8EMIT_ENV_(n, rt, a, o) struct n##_env_t { \
+  FN_8CTYPE(rt, n, a, _fun); size_t _size; M_FOR_EACH(FN_8FLDS, M_ID o) };
 #define FN_8FLDS(F) M_FIRST_ F M_REST_ F;
-#define FN_8CL_DEC(rt, n, a) static rt n(struct n##_env_t * _env, M_ID a)
+#define FN_8CL_DEC(rt, n, a) static rt n(void * _envV, M_ID a) { struct n##_env_t * _env = _envV; 
 
 #define FN_8FTYPE(rt, C, a, pn) rt(* C pn)a
-#define FN_8CTYPE(rt, n, a, pn) rt(* pn)(struct n##_env_t *, M_ID a)
+#define FN_8CTYPE(rt, n, a, pn) rt(* pn)(void *, M_ID a)
 #define FN_8FN_TYPE(F) M_CONC(FN_8GETTYPE_, M_FIRST(M_REST((F))))
 #define FN_8GETTYPE_8fn(rt, a, ...) rt(* _fun)a
 #define FN_8CLSZ(T, N) T M_CONC(_, N);
@@ -151,8 +155,8 @@
 #define FN_8F2NS(FL, Q) (8DO_Q, ((M_FOR_E2(FN_8F2NS_1, M_ID FL), M_ID Q)))
 #define FN_8F2NS_1(F) ,FN_8F2NS_2 F
 #define FN_8F2NS_2(n, isC, rt, a, ...) M_IF(isC, \
-((8EMIT_NS_NX, (n, (FN_8CL_DEC(rt, n, a)), M_REST(__VA_ARGS__))), (8EMIT_ENV,(n, rt, a, M_FIRST(__VA_ARGS__)))), \
-((8EMIT_NS_NX, (n, (static rt n a), __VA_ARGS__))))
+  ((8EMIT_NS_NX, (n, (FN_8CL_DEC(rt, n, a)), M_REST(__VA_ARGS__))), (8EMIT_ENV,(n, rt, a, M_FIRST(__VA_ARGS__)))), \
+  ((8EMIT_NS_NX, (n, (static rt n a), __VA_ARGS__))))
 
 #define FN_8DO_Q(Q) (M_ID(M_FIRST_ M_FIRST_ Q),(M_ID M_REST_ M_FIRST_ Q, (M_REST_ Q)))
 
