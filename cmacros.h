@@ -20,7 +20,7 @@ _16, _15, _14, _13, _12, _11, _10, _9, _8, _7, _6, _5, _4, _3, _2, _1, N, ...) N
 17, 18, 19, 20, 21, 23, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32)
 
 #define M_ID(...) __VA_ARGS__
-#define M_FIRST(...) M_FIRST_(__VA_ARGS__)
+#define M_FIRST(...) M_FIRST_(__VA_ARGS__,)
 #define M_REST(...) M_REST_(__VA_ARGS__)
 #define M_FIRST_(A, ...) A
 #define M_REST_(A, ...) __VA_ARGS__
